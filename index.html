@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>北海道旅遊打包清單 App</title>
+    <meta name="description" content="北海道5天4夜跟團專屬打包清單">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- 1. 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 引入 React 和 ReactDOM (UMD 版本，最穩定) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. 引入 Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 4. 引入手機拖曳 Polyfill -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/default.css">
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/index.min.js"></script>
+    
+    <!-- 5. Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                        display: ['"Quicksand"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        },
+                        warm: {
+                            50: '#fffbeb',
+                            100: '#fef3c7',
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 初始化拖曳 Polyfill
+        MobileDragDrop.polyfill({
+            dragImageCenterOnTouch: true,
+            holdToDrag: 300
+        });
+        
+        window.addEventListener( 'touchmove', function() {}, {passive: false});
+    </script>
+    
+    <style>
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; }
+        textarea { transition: height 0.1s ease; resize: none; }
+        
+        .dnd-dragging { opacity: 0.5; background-color: #f0f9ff; border: 2px dashed #3b82f6; }
+        .dnd-over { background-color: #eff6ff; border: 2px solid #3b82f6; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 內建圖示庫 ---
+        const Icons = {
+            Check: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+            Plus: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Trash2: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
+            RotateCcw: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>,
+            MapPin: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+            Ticket: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>,
+            Shirt: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>,
+            Plug: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>,
+            BriefcaseMedical: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 11h20"/><path d="M6 11V7a4 4 0 0 1 8 0v4"/><rect width="20" height="13" x="2" y="11" rx="2" ry="2"/><path d="M12 15v6"/><path d="M9 18h6"/></svg>,
+            Sparkles: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 5H5"/><path d="M3 7h4"/><path d="M7 3v4"/></svg>,
+            AlertTriangle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+            Luggage: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 20h0a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h0"/><path d="M8 18V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v14"/><path d="M10 20h4"/><circle cx="16" cy="20" r="2"/><circle cx="8" cy="20" r="2"/></svg>,
+            Backpack: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M8 21v-5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v5"/><path d="M8 10h8"/><path d="M8 18h8"/></svg>,
+            ShoppingBag: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
+            User: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+            HelpCircle: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>,
+            Lightbulb: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>,
+            Search: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+            X: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            Calendar: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+            Umbrella: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 12a11.05 11.05 0 0 0-22 0zm-5 7a3 3 0 0 1-6 0v-7"/></svg>,
+            GripVertical: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>,
+            Snow: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></svg>,
+            Thermometer: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+        };
+
+        // --- App 邏輯 ---
+
+        const BAG_TYPES = {
+            suitcase: { 
+                id: 'suitcase', 
+                label: '行李箱', 
+                color: 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100', 
+                activeColor: 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200', 
+                icon: Icons.Luggage 
+            },
+            backpack: { 
+                id: 'backpack', 
+                label: '後背包', 
+                color: 'bg-sky-50 text-sky-600 border-sky-200 hover:bg-sky-100', 
+                activeColor: 'bg-sky-500 text-white border-sky-500 shadow-md shadow-sky-200', 
+                icon: Icons.Backpack 
+            },
+            pouch: { 
+                id: 'pouch', 
+                label: '隨身包', 
+                color: 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100', 
+                activeColor: 'bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-200', 
+                icon: Icons.ShoppingBag 
+            },
+            wearing: { 
+                id: 'wearing', 
+                label: '穿身上', 
+                color: 'bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-100', 
+                activeColor: 'bg-violet-500 text-white border-violet-500 shadow-md shadow-violet-200', 
+                icon: Icons.User 
+            },
+        };
+
+        const DAY_OPTIONS = [null, 'D1', 'D1-2', 'D2', 'D2-3', 'D3', 'D3-4', 'D4', 'D4-5', 'D5', 'All'];
+
+        const SMART_SUGGESTIONS = [
+            { keywords: ['冷', '寒', '凍', '暖'], items: [{ name: '貼腳底暖暖包', cat: 'lifestyle' }, { name: '暖暖包 (貼式)', cat: 'lifestyle' }, { name: '圍巾', cat: 'clothes_acc' }, { name: '毛帽', cat: 'clothes_acc' }] },
+            { keywords: ['睡', '眠', '車', '累'], items: [{ name: '頸枕', cat: 'lifestyle' }, { name: '眼罩', cat: 'lifestyle' }, { name: '耳塞', cat: 'lifestyle' }, { name: '褪黑激素(助眠)', cat: 'medicines' }] },
+            { keywords: ['藥', '痛', '病', '暈'], items: [{ name: '綜合感冒藥', cat: 'medicines' }, { name: '止痛藥 (EVE/普拿疼)', cat: 'medicines' }, { name: '胃藥/整腸藥', cat: 'medicines' }, { name: '暈車藥', cat: 'medicines' }, { name: 'OK繃/液體絆創膏', cat: 'medicines' }] },
+            { keywords: ['洗', '浴', '溫泉', '潔'], items: [{ name: '防水束口袋 (裝髒衣)', cat: 'toiletries' }, { name: '綁髮圈 (泡湯用)', cat: 'toiletries' }, { name: '卸妝棉', cat: 'toiletries' }, { name: '身體乳液', cat: 'toiletries' }] },
+            { keywords: ['吃', '蟹', '食', '牙'], items: [{ name: '牙線/牙線棒', cat: 'toiletries' }, { name: '一次性手套', cat: 'lifestyle' }, { name: '濕紙巾', cat: 'lifestyle' }, { name: '夾鏈袋 (裝垃圾)', cat: 'lifestyle' }] },
+            { keywords: ['電', '充', '機', '拍'], items: [{ name: '多孔轉接頭', cat: 'electronics' }, { name: '行動電源', cat: 'electronics' }, { name: '記憶卡 (備用)', cat: 'electronics' }, { name: '腳架/自拍棒', cat: 'electronics' }] },
+            { keywords: ['女', '理', '經', '月'], items: [{ name: '衛生棉/條', cat: 'medicines' }, { name: '熱敷貼', cat: 'medicines' }, { name: '止痛藥', cat: 'medicines' }] },
+            { keywords: ['滑', '雪', '跌'], items: [{ name: '護膝', cat: 'medicines' }, { name: '護踝', cat: 'medicines' }, { name: '防摔褲', cat: 'clothes_bottoms' }, { name: '防水手套', cat: 'clothes_acc' }] },
+            { keywords: ['隱', '眼', '鏡'], items: [{ name: '生理食鹽水', cat: 'toiletries' }, { name: '人工淚液', cat: 'toiletries' }, { name: '備用眼鏡', cat: 'medicines' }] },
+            { keywords: ['傷', '血', '腳'], items: [{ name: 'OK繃', cat: 'medicines' }, { name: '休足時間/貼布', cat: 'medicines' }, { name: '液體絆創膏', cat: 'medicines' }] },
+        ];
+
+        // 預設資料 (v50 最終修正版)
+        const INITIAL_DATA = {
+            title: "北海道 1/8-1/12 (雄獅跟團版)",
+            categories: [
+                {
+                id: 'docs',
+                tabId: 'docs',
+                name: '證件與錢財',
+                icon: <Icons.Ticket className="w-5 h-5" />,
+                items: [
+                    { id: 'd1', name: '護照 (有效期限6個月以上)', quantity: '1本', checked: false, mustCarryOn: true, bag: 'pouch', day: null },
+                    { id: 'd4', name: '日幣現金 (貴重物品請隨身)', quantity: '適量', checked: false, mustCarryOn: true, bag: 'pouch', day: null },
+                    { id: 'd5', name: '信用卡 (建議2張不同組織)', quantity: '2張', checked: false, mustCarryOn: true, bag: 'pouch', day: null },
+                    { id: 'd_twd', name: '台幣現金 (司機小費/導遊代收)', quantity: '1500元', checked: false, bag: 'pouch', day: null },
+                    { id: 'd6', name: '零錢包 (投販賣機/扭蛋)', quantity: '1個', checked: false, bag: 'pouch', day: null },
+                    { id: 'd7', name: '隨身原子筆', quantity: '1支', checked: false, bag: 'pouch', day: null },
+                ]
+                },
+                {
+                id: 'clothes_outer',
+                tabId: 'clothes',
+                name: '衣物：外著與鞋靴',
+                icon: <Icons.Shirt className="w-5 h-5" />,
+                items: [
+                    { id: 'c_out1', name: '[迪卡儂] SH900 -20°C 防水外套', quantity: '1件', checked: false, bag: 'wearing', day: 'D1' },
+                    { id: 'c_out2', name: '[迪卡儂] NH100 防水雪靴-米色', quantity: '1雙', checked: false, bag: 'wearing', day: 'D1' },
+                ]
+                },
+                {
+                id: 'clothes_tops',
+                tabId: 'clothes',
+                name: '衣物：上身與內著',
+                icon: <Icons.Shirt className="w-5 h-5" />,
+                items: [
+                    { id: 'c_top_uniqlo_warm_worn', name: '[Uniqlo] 棉質極暖 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1' },
+                    { id: 'c_mid_fleece_worn', name: '[迪卡儂] 抓絨外套 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1' },
+                    { id: 'c_mid_muji', name: '[MUJI] 輕量羽絨可攜式無領背心 (黑)', quantity: '1件', checked: false, bag: 'backpack', day: 'D1' },
+                    
+                    { id: 'c_top_wiwi', name: '[WIWI] 發熱衣', quantity: '2件', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_top_decathlon', name: '[迪卡儂] 滑雪底層', quantity: '1件', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_top_net', name: '[NET] 發熱衣', quantity: '1件', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_top_net_spare', name: '[NET] 發熱衣 (備用)', quantity: '1件', checked: false, bag: 'suitcase', day: null },
+                ]
+                },
+                {
+                id: 'clothes_bottoms',
+                tabId: 'clothes',
+                name: '衣物：下身與襪子',
+                icon: <Icons.Shirt className="w-5 h-5" />,
+                items: [
+                    { id: 'c_bot_uniqlo_worn', name: '[Uniqlo] 基本發熱褲 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1-2' },
+                    { id: 'c_bot_decathlon_worn', name: '[迪卡儂] NH100 健行褲 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1-2' },
+                    
+                    { id: 'c_bot_ypl', name: '[YPL] 德絨發熱褲', quantity: '2件', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_bot_uniqlo', name: '[Uniqlo] 基本發熱褲 (換洗)', quantity: '1件', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_bot_decathlon', name: '[迪卡儂] NH100 健行褲 (換洗)', quantity: '1件', checked: false, bag: 'suitcase', day: null },
+                    
+                    { id: 'c_sock_wool_worn', name: '羊毛襪 (出發穿)', quantity: '1雙', checked: false, bag: 'wearing', day: 'D1' },
+                    { id: 'c_sock_wool', name: '羊毛襪 (換洗)', quantity: '3雙', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_sock_normal', name: '一般襪', quantity: '1雙', checked: false, bag: 'suitcase', day: null },
+                ]
+                },
+                {
+                id: 'clothes_underwear',
+                tabId: 'clothes',
+                name: '衣物：內衣/睡衣',
+                icon: <Icons.Shirt className="w-5 h-5" />,
+                items: [
+                    { id: 'c_underwear_sets', name: '[換洗] 內衣褲 (替換用)', quantity: '4套', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_pajamas', name: '[自備] 睡衣褲', quantity: '1套', checked: false, bag: 'suitcase', day: null },
+                ]
+                },
+                {
+                id: 'clothes_acc',
+                tabId: 'clothes',
+                name: '衣物：保暖配件',
+                icon: <Icons.Shirt className="w-5 h-5" />,
+                items: [
+                    { id: 'c_scarf_wool', name: '純羊毛圍巾', quantity: '1條', checked: false, bag: 'wearing', day: 'D1' },
+                    { id: 'c_hat', name: '毛帽', quantity: '1頂', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_scarf_fleece', name: '[迪卡儂] 刷毛圍脖', quantity: '1條', checked: false, bag: 'suitcase', day: null },
+                    { id: 'c_gloves', name: '手套', quantity: '1雙', checked: false, bag: 'suitcase', day: null },
+                ]
+                },
+                {
+                id: 'electronics',
+                tabId: 'electronics',
+                name: '電子產品',
+                icon: <Icons.Plug className="w-5 h-5" />,
+                items: [
+                    { id: 'e_anker25k', name: '[ANKER] A1695 (25000mAh/90Wh)', quantity: '1顆', checked: false, mustCarryOn: true, bag: 'backpack', day: null },
+                    { id: 'e_anker10k', name: '[ANKER] A1657 (10000mAh/37Wh)', quantity: '1顆', checked: false, mustCarryOn: true, bag: 'backpack', day: null },
+                    { id: 'e3', name: '充電線 / 插頭 (日本為兩孔)', quantity: '1組', checked: false, bag: null, day: null },
+                    { id: 'e4', name: '手機掛繩 (背帶款)', quantity: '1條', checked: false, bag: null, day: null },
+                    { id: 'e4_wrist', name: '手機掛繩 (腕帶款)', quantity: '1條', checked: false, bag: 'pouch', day: null },
+                    { id: 'e_airpods', name: '[Apple] AirPods / 耳機', quantity: '1組', checked: false, bag: null, day: null },
+                    { id: 'e_watch', name: '[Apple] Watch + 充電線', quantity: '1組', checked: false, bag: null, day: null },
+                    { id: 'e5', name: '多孔轉接頭', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 'e6', name: '多孔充電頭', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 'e7', name: 'Type-C 充電線 (備用)', quantity: '1條', checked: false, bag: null, day: null },
+                    { id: 'e_pump', name: '鋰電池真空幫浦 (不可託運)', quantity: '1個', checked: false, mustCarryOn: true, bag: 'backpack', day: null },
+                    { id: 'e_scale', name: '行李秤 (量戰利品重量)', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 'e_airtag', name: '[Apple] AirTag (行李追蹤)', quantity: '1個', checked: false, bag: null, day: null },
+                ]
+                },
+                {
+                id: 'toiletries',
+                tabId: 'toiletries',
+                name: '盥洗與保養 (保濕加強)',
+                icon: <Icons.Sparkles className="w-5 h-5" />,
+                items: [
+                    { id: 't_ga_cream', name: '[GA] 黑曜岩新生奇蹟乳霜 15ml (頂級保濕)', quantity: '1罐', checked: false, bag: 'pouch', day: null },
+                    { id: 't1', name: '超保濕乳液/身體油', quantity: '1瓶', checked: false, bag: null, day: null },
+                    { id: 't2', name: '護唇膏 (高滋潤度)', quantity: '1支', checked: false, bag: 'pouch', day: null },
+                    { id: 't3', name: '牙刷牙膏 (原清單)', quantity: '1組', checked: false, bag: null, day: null },
+                    { id: 't_toothpaste_new', name: '牙膏牙刷 (備用)', quantity: '1組', checked: false, bag: null, day: null },
+                    { id: 't4', name: '洗面乳', quantity: '1條', checked: false, bag: null, day: null },
+                    { id: 't_remove_water', name: '卸妝水', quantity: '1瓶', checked: false, mustCheckIn: true, bag: null, day: null },
+                    { id: 't_remove_cotton', name: '卸妝棉', quantity: '1包', checked: false, bag: null, day: null },
+                    { id: 't_face_towel', name: '抛棄式洗臉巾', quantity: '1包', checked: false, bag: null, day: null },
+                    { id: 't5', name: '晚安面膜 (暖氣房必備)', quantity: '5片', checked: false, bag: null, day: null },
+                    { id: 't6', name: '潤髮乳/護髮油 (防靜電)', quantity: '1瓶', checked: false, bag: null, day: null },
+                    { id: 't_hair_towel', name: '擦髮巾 (快乾神器)', quantity: '2條', checked: false, bag: null, day: null },
+                    { id: 't_dry_hair_towel_new', name: '乾髮巾', quantity: '1條', checked: false, bag: null, day: null },
+                    { id: 't_floss', name: '牙線 / 牙線棒', quantity: '1盒', checked: false, bag: null, day: null },
+                    { id: 't_skin', name: '基礎保養品 (化妝水/精華液)', quantity: '1組', checked: false, bag: null, day: null },
+                    { id: 't_sun', name: '防曬乳 (雪地強紫外線)', quantity: '1瓶', checked: false, bag: 'pouch', day: null },
+                    { id: 't_hair', name: '髮圈 / 綁髮帶', quantity: '適量', checked: false, bag: 'pouch', day: null },
+                    { id: 't_hair_clip', name: '髮夾', quantity: '適量', checked: false, bag: 'pouch', day: null },
+                    { id: 't_fluffy', name: '毛茸茸髮圈', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 't_nail', name: '指甲剪', quantity: '1支', checked: false, bag: null, day: null },
+                    { id: 't_cotton', name: '棉花棒 (清潔/修容)', quantity: '1包', checked: false, bag: null, day: null },
+                    { id: 't_comb', name: '隨身梳子', quantity: '1支', checked: false, bag: 'pouch', day: null },
+                    { id: 't_hand', name: '護手霜 (滋潤款)', quantity: '1條', checked: false, bag: 'pouch', day: null },
+                    { id: 't_bag', name: '防水束口袋/塑膠袋', quantity: '3個', checked: false, bag: null, day: null },
+                ]
+                },
+                {
+                id: 'medicines',
+                name: '藥品與保健',
+                icon: <Icons.BriefcaseMedical className="w-5 h-5" />,
+                items: [
+                    { id: 'm_knee', name: '護膝 (超重要!)', quantity: '1雙', checked: false, bag: null, day: null },
+                    { id: 'm_ankle', name: '護踝 (防翻船)', quantity: '1雙', checked: false, bag: null, day: null },
+                    { id: 'm_patch', name: '痠痛穴道貼', quantity: '1盒', checked: false, bag: null, day: null },
+                    { id: 'm2', name: '常備藥 (感冒/止痛/暈車)', quantity: '1包', checked: false, bag: 'pouch', day: null },
+                    { id: 'm8', name: '口罩 (防冷風/保濕)', quantity: '10片', checked: false, bag: 'backpack', day: null },
+                ]
+                },
+                {
+                id: 'lifestyle',
+                tabId: 'lifestyle',
+                name: '生活小物',
+                icon: <Icons.Umbrella className="w-5 h-5" />,
+                items: [
+                    { id: 'm_drink_bag', name: '飲料提袋', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 'm_lunch_bag', name: '環保便當提袋', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 'm_3coins', name: '[3COINS] 透明大提袋', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 'm_eco_bag', name: '環保購物袋', quantity: '1個', checked: false, bag: 'pouch', day: null },
+                    { id: 'm_gloves', name: '一次性手套 (吃蟹/防疫)', quantity: '1包', checked: false, bag: 'pouch', day: null },
+                    { id: 'm_dogbag', name: '狗便袋 (隨身垃圾袋)', quantity: '1卷', checked: false, bag: 'pouch', day: null },
+                    { id: 'm_freshbag_new', name: '蔬果保鮮袋 (裝水果/濕物)', quantity: '1卷', checked: false, bag: null, day: null },
+                    { id: 'm_neckpillow', name: '頸枕 (遊覽車補眠用)', quantity: '1個', checked: false, bag: 'backpack', day: null },
+                    { id: 'm_eyemask', name: '眼罩 (機上/車上補眠)', quantity: '1個', checked: false, bag: 'backpack', day: null },
+                    { id: 'm1', name: '貼式暖暖包 (重要!)', quantity: '10包', checked: false, bag: 'suitcase', day: null },
+                    { id: 'm_handwarmer_new', name: '暖暖包 (手握式)', quantity: '10包', checked: false, bag: null, day: null },
+                    { id: 'm_toepatch', name: '貼腳底暖暖包 (鞋墊型)', quantity: '3雙', checked: false, bag: null, day: null },
+                    { id: 'm_ziploc', name: '夾鏈袋 (吃螃蟹/裝小物)', quantity: '5個', checked: false, bag: 'pouch', day: null },
+                    { id: 'm_gorilla', name: '猩猩之握 (腳底按摩)', quantity: '1個', checked: false, bag: null, day: null },
+                    { id: 'm_slipper', name: '拖鞋 (室內/機艙用)', quantity: '1雙', checked: false, bag: 'backpack', day: null },
+                    { id: 'm_bath_towel', name: '免洗浴巾', quantity: '5條', checked: false, bag: null, day: null },
+                    { id: 'm_duvet', name: '被套 (隔髒用)', quantity: '1組', checked: false, bag: null, day: null },
+                    { id: 'm3', name: '太陽眼鏡 (雪地反光強)', quantity: '1支', checked: false, bag: 'pouch', day: null },
+                    { id: 'm4', name: '保溫瓶 (隨時喝熱水)', quantity: '1個', checked: false, bag: 'backpack', day: null },
+                    { id: 'm5', name: '衣物壓縮袋', quantity: '2個', checked: false, bag: null, day: null },
+                    { id: 'm6', name: '濕紙巾 / 面紙', quantity: '適量', checked: false, bag: 'pouch', day: null },
+                    { id: 'm7', name: '折疊購物袋', quantity: '1個', checked: false, bag: 'pouch', day: null },
+                    { id: 'm_umb', name: '輕便折疊傘', quantity: '1支', checked: false, bag: 'backpack', day: null },
+                    { id: 'm_knife', name: '隨身小刀 / 剪刀', quantity: '1支', checked: false, mustCheckIn: true, bag: null, day: null },
+                    { id: 'm_tape', name: '皮尺', quantity: '1個', checked: false, bag: 'pouch', day: null },
+                    { id: 'm_static', name: '靜電手環', quantity: '1條', checked: false, bag: 'pouch', day: null },
+                    { id: 'm_doubletape', name: '雙面膠', quantity: '1捲', checked: false, bag: null, day: null },
+                    { id: 'm_strap', name: '行李箱固定綁繩', quantity: '1條', checked: false, bag: null, day: null },
+                ]
+                }
+            ]
+        };
+
+        const TABS = [
+            { id: 'docs', label: '證件', icon: Icons.Ticket, match: ['docs'] },
+            { id: 'clothes', label: '衣物', icon: Icons.Shirt, match: ['clothes_outer', 'clothes_tops', 'clothes_bottoms', 'clothes_underwear', 'clothes_acc'] },
+            { id: 'electronics', label: '電子', icon: Icons.Plug, match: ['electronics'] },
+            { id: 'toiletries', label: '盥洗', icon: Icons.Sparkles, match: ['toiletries'] },
+            { id: 'meds', label: '藥品/生活', icon: Icons.BriefcaseMedical, match: ['medicines', 'lifestyle'] },
+        ];
+
+        function HokkaidoPackingList() {
+            const [listData, setListData] = useState(INITIAL_DATA);
+            const [newItemName, setNewItemName] = useState('');
+            const [newItemQty, setNewItemQty] = useState('');
+            // Add category state for new category name
+            const [newCategoryName, setNewCategoryName] = useState('');
+            const [addingCategory, setAddingCategory] = useState(false);
+
+            const [activeCategory, setActiveCategory] = useState(null);
+            const [activeTab, setActiveTab] = useState('docs');
+            const [filterBag, setFilterBag] = useState(null); 
+            const [filterDay, setFilterDay] = useState(null); 
+            
+            const [showSmartAdd, setShowSmartAdd] = useState(false);
+            const [smartInput, setSmartInput] = useState('');
+            const [smartSuggestions, setSmartSuggestions] = useState([]);
+
+            // 確保資料正確讀寫
+            useEffect(() => {
+                try {
+                    const savedData = localStorage.getItem('hokkaido_packing_list_jan_v50'); // Updated key
+                    if (savedData) {
+                        const parsed = JSON.parse(savedData);
+                        if (parsed && parsed.categories) {
+                            setListData(parsed);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Data parse error", e);
+                }
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('hokkaido_packing_list_jan_v50', JSON.stringify(listData));
+            }, [listData]);
+
+            // Smart Add Logic
+            useEffect(() => {
+                if (!smartInput.trim()) {
+                    setSmartSuggestions([]);
+                    return;
+                }
+                const input = smartInput.toLowerCase();
+                const suggestions = SMART_SUGGESTIONS.filter(group => 
+                    group.keywords.some(k => input.includes(k))
+                ).flatMap(group => group.items);
+                
+                setSmartSuggestions(suggestions);
+            }, [smartInput]);
+
+            const toggleCheck = (catId, itemId) => {
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    item.checked = !item.checked;
+                    return newData;
+                });
+            };
+
+            const updateItem = (catId, itemId, field, value) => {
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    item[field] = value;
+                    return newData;
+                });
+            };
+            
+            // Edit Category Name
+            const updateCategoryName = (catId, newName) => {
+                 setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    category.name = newName;
+                    return newData;
+                });
+            };
+            
+            // Delete Category
+            const deleteCategory = (catId) => {
+                 if(window.confirm('確定要刪除此分類及其所有物品嗎？')) {
+                     setListData(prev => {
+                        const newData = { ...prev };
+                        newData.categories = newData.categories.filter(c => c.id !== catId);
+                        return newData;
+                    });
+                 }
+            };
+            
+            // Add Category function
+            const addCategory = () => {
+                if (!newCategoryName.trim()) return;
+                
+                const newCat = {
+                    id: `cat_${Date.now()}`,
+                    tabId: activeTab,
+                    name: newCategoryName,
+                    icon: <Icons.Sparkles className="w-5 h-5" />, // Default icon
+                    items: []
+                };
+                
+                setListData(prev => {
+                    const newData = { ...prev };
+                    newData.categories.push(newCat);
+                    return newData;
+                });
+                
+                setNewCategoryName('');
+                setAddingCategory(false);
+            };
+
+
+            const cycleBag = (catId, itemId) => {
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    
+                    const bags = ['suitcase', 'backpack', 'pouch', 'wearing', null]; 
+                    
+                    let attempts = 0;
+                    let currentBag = item.bag;
+                    const currentIndex = bags.indexOf(currentBag);
+                    
+                    while (attempts < bags.length) {
+                        const candidateIndex = (currentIndex + 1 + attempts) % bags.length;
+                        const candidateBag = bags[candidateIndex];
+                        
+                        let isValid = true;
+                        if (candidateBag === 'suitcase' && item.mustCarryOn) isValid = false;
+                        if ((candidateBag === 'backpack' || candidateBag === 'pouch' || candidateBag === 'wearing') && item.mustCheckIn) isValid = false;
+
+                        if (isValid) {
+                            item.bag = candidateBag;
+                            break;
+                        }
+                        attempts++;
+                    }
+                    return newData;
+                });
+            };
+
+            const cycleDay = (catId, itemId) => {
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    
+                    const currentDay = item.day || null;
+                    const currentIndex = DAY_OPTIONS.indexOf(currentDay);
+                    const nextIndex = (currentIndex + 1) % DAY_OPTIONS.length;
+                    
+                    item.day = DAY_OPTIONS[nextIndex];
+                    return newData;
+                });
+            };
+
+            const addItem = (catId, name, qty) => {
+                if (!name.trim()) return;
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    category.items.push({
+                        id: Date.now().toString(),
+                        name: name,
+                        quantity: qty || '1個',
+                        checked: false,
+                        mustCarryOn: false,
+                        mustCheckIn: false,
+                        bag: null,
+                        day: null
+                    });
+                    return newData;
+                });
+                if (activeCategory) {
+                    setNewItemName('');
+                    setNewItemQty('');
+                    setActiveCategory(null);
+                }
+            };
+            
+            // Drag and Drop Handlers
+            const handleDragStart = (e, itemId, fromCatId) => {
+                e.dataTransfer.setData('application/json', JSON.stringify({ itemId, fromCatId }));
+                e.dataTransfer.effectAllowed = 'move';
+            };
+            
+            const handleDragOver = (e) => {
+                e.preventDefault(); // Necessary to allow dropping
+                e.dataTransfer.dropEffect = 'move';
+            };
+            
+            const handleDrop = (e, toCatId) => {
+                e.preventDefault();
+                const data = e.dataTransfer.getData('application/json');
+                if (!data) return;
+                
+                try {
+                    const { itemId, fromCatId } = JSON.parse(data);
+                    
+                    if (fromCatId === toCatId) return; // Same category, do nothing for now (sorting requires more logic)
+                    
+                    setListData(prev => {
+                        const newData = { ...prev };
+                        const fromCat = newData.categories.find(c => c.id === fromCatId);
+                        const toCat = newData.categories.find(c => c.id === toCatId);
+                        
+                        const itemIndex = fromCat.items.findIndex(i => i.id === itemId);
+                        if (itemIndex === -1) return prev;
+                        
+                        const [item] = fromCat.items.splice(itemIndex, 1);
+                        toCat.items.push(item);
+                        
+                        return newData;
+                    });
+                    
+                } catch (err) {
+                    console.error("Drop error", err);
+                }
+            };
+
+            const deleteItem = (catId, itemId) => {
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    category.items = category.items.filter(i => i.id !== itemId);
+                    return newData;
+                });
+            };
+
+            const resetList = () => {
+                if (window.confirm('確定要重置清單嗎？這會恢復到預設的專屬清單狀態。')) {
+                    setListData(INITIAL_DATA);
+                    localStorage.removeItem('hokkaido_packing_list_jan_v50');
+                }
+            };
+
+            const calculateProgress = () => {
+                const currentCats = listData.categories;
+                let total = 0;
+                let checked = 0;
+                currentCats.forEach(cat => {
+                    cat.items.forEach(item => {
+                        total++;
+                        if (item.checked) checked++;
+                    });
+                });
+                return total === 0 ? 0 : Math.round((checked / total) * 100);
+            };
+
+            const progress = calculateProgress();
+
+            let visibleCategories = listData.categories;
+
+            if (filterBag === 'unclassified') {
+                visibleCategories = visibleCategories.map(cat => ({
+                    ...cat,
+                    items: cat.items.filter(item => !item.bag)
+                })).filter(cat => cat.items.length > 0);
+            } else if (filterBag) {
+                visibleCategories = visibleCategories.map(cat => ({
+                    ...cat,
+                    items: cat.items.filter(item => item.bag === filterBag)
+                })).filter(cat => cat.items.length > 0);
+            }
+
+            if (filterDay) {
+                visibleCategories = visibleCategories.map(cat => ({
+                    ...cat,
+                    items: cat.items.filter(item => {
+                        if (item.day === 'All') return true;
+                        if (!item.day) return false;
+                        
+                        // Check exact match first
+                        if (item.day === filterDay) return true;
+                        
+                        // Check range match (e.g. filterDay 'D1' matches itemDay 'D1-2')
+                        if (item.day.includes('-')) {
+                             const range = item.day.replace('D', '').split('-');
+                             const start = parseInt(range[0]);
+                             const end = parseInt(range[1]);
+                             const target = parseInt(filterDay.replace('D', ''));
+                             return target >= start && target <= end;
+                        }
+                        
+                        return false;
+                    })
+                })).filter(cat => cat.items.length > 0);
+            }
+
+            if (!filterBag && !filterDay) {
+                const activeTabConfig = TABS.find(t => t.id === activeTab);
+                visibleCategories = visibleCategories.filter(cat => 
+                    activeTabConfig?.match.some(prefix => cat.id.startsWith(prefix) || cat.tabId === activeTab)
+                );
+            }
+
+            const adjustTextareaHeight = (element) => {
+                if (element) {
+                    element.style.height = 'auto';
+                    element.style.height = `${element.scrollHeight}px`;
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-32">
+                    <div className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white p-5 sticky top-0 z-20 shadow-lg rounded-b-3xl">
+                        <div className="max-w-md mx-auto">
+                            <div className="flex justify-between items-center mb-4">
+                                <div>
+                                    <h1 className="text-2xl font-bold flex items-center gap-2 drop-shadow-sm">
+                                        <Icons.MapPin size={24} className="text-white" /> 北海道 1/8 - 1/12
+                                    </h1>
+                                    <p className="text-blue-100 text-sm mt-1 font-medium tracking-wide">跟團專屬打包清單</p>
+                                </div>
+                                <button 
+                                    onClick={resetList}
+                                    className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/20 transition-all active:scale-95"
+                                    title="重置清單"
+                                >
+                                    <Icons.RotateCcw size={20} />
+                                </button>
+                            </div>
+
+                            <div className="bg-black/20 rounded-full h-4 w-full overflow-hidden backdrop-blur-sm p-0.5">
+                                <div 
+                                    className="bg-gradient-to-r from-emerald-300 to-emerald-400 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(52,211,153,0.5)]"
+                                    style={{ width: `${progress}%` }}
+                                ></div>
+                            </div>
+                            <div className="flex justify-between text-xs mt-1.5 text-blue-50 font-medium px-1">
+                                <span>打包進度</span>
+                                <span>{progress}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-md mx-auto p-4 relative">
+                        <div className="mb-6">
+                            <button 
+                                onClick={() => setShowSmartAdd(!showSmartAdd)}
+                                className={`w-full py-3.5 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold transition-all duration-300 transform active:scale-[0.98] ${
+                                    showSmartAdd 
+                                        ? 'bg-amber-50 border-amber-300 text-amber-700 shadow-inner' 
+                                        : 'bg-white border-dashed border-slate-300 text-slate-500 hover:border-blue-400 hover:text-blue-500 hover:shadow-md'
+                                }`}
+                            >
+                                {showSmartAdd ? <Icons.X size={20} /> : <Icons.Lightbulb size={20} />}
+                                {showSmartAdd ? '關閉小幫手' : '怕漏帶？開啟智慧小幫手'}
+                            </button>
+
+                            {showSmartAdd && (
+                                <div className="mt-4 bg-amber-50/80 backdrop-blur-md p-5 rounded-3xl border border-amber-100 shadow-lg animate-in slide-in-from-top-4 duration-300">
+                                    <div className="relative mb-4">
+                                        <Icons.Search className="absolute left-4 top-3 text-amber-600/50" size={18} />
+                                        <input 
+                                            type="text"
+                                            placeholder="輸入關鍵字 (如: 怕冷, 怕吵, 女生...)"
+                                            className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-amber-200 bg-white/80 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:outline-none transition-all"
+                                            value={smartInput}
+                                            onChange={(e) => setSmartInput(e.target.value)}
+                                            autoFocus
+                                        />
+                                    </div>
+                                    
+                                    {smartSuggestions.length > 0 ? (
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            {smartSuggestions.map((item, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => {
+                                                        addItem(item.cat, item.name, '1個');
+                                                        alert(`已將「${item.name}」加入清單！`);
+                                                    }}
+                                                    className="text-left text-sm bg-white p-3 rounded-xl border border-amber-100 hover:bg-amber-100 hover:border-amber-300 transition-all shadow-sm flex items-center justify-between group active:scale-95"
+                                                >
+                                                    <span className="font-medium text-slate-700">{item.name}</span>
+                                                    <div className="bg-amber-100 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Icons.Plus size={14} className="text-amber-600" />
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center text-xs text-amber-700/70 py-2 font-medium">
+                                            {smartInput ? '沒有直接匹配的建議，試試其他關鍵字？' : '輸入情境，我來幫您想！'}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-2 mb-4 overflow-x-auto pb-2 text-xs">
+                             <button onClick={() => { setFilterBag(filterBag === 'suitcase' ? null : 'suitcase'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'suitcase' ? BAG_TYPES.suitcase.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600'}`}><Icons.Luggage size={16} /> <span className="font-bold text-xs">行李箱</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'backpack' ? null : 'backpack'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'backpack' ? BAG_TYPES.backpack.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600'}`}><Icons.Backpack size={16} /> <span className="font-bold text-xs">後背包</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'pouch' ? null : 'pouch'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'pouch' ? BAG_TYPES.pouch.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-pink-50 hover:border-pink-200 hover:text-pink-600'}`}><Icons.ShoppingBag size={16} /> <span className="font-bold text-xs">隨身包</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'wearing' ? null : 'wearing'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'wearing' ? BAG_TYPES.wearing.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600'}`}><Icons.User size={16} /> <span className="font-bold text-xs">穿身上</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'unclassified' ? null : 'unclassified'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'unclassified' ? 'bg-slate-600 text-white border-slate-600 ring-2 ring-slate-200 shadow-lg' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}><Icons.HelpCircle size={16} /> <span className="font-bold text-xs">未分類</span></button>
+                        </div>
+
+                        <div className="flex gap-2 mb-6 overflow-x-auto pb-1 px-1 scrollbar-hide">
+                            {['D1', 'D2', 'D3', 'D4', 'D5'].map(day => (
+                                <button key={day} onClick={() => { setFilterDay(filterDay === day ? null : day); setFilterBag(null); }} className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs font-bold transition-all active:scale-95 ${filterDay === day ? 'bg-teal-500 text-white border-teal-500 ring-2 ring-teal-200 shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-teal-50 hover:text-teal-600'}`}>{day}</button>
+                            ))}
+                        </div>
+
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500" key={filterBag || filterDay || activeTab}>
+                            {visibleCategories.length === 0 ? (
+                                <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border-2 border-dashed border-slate-200 mx-4">
+                                    <p className="font-medium text-lg">此分類中沒有物品</p>
+                                    {filterBag === 'unclassified' && <p className="text-sm mt-2 text-slate-500">太棒了！所有物品都已分配位置。</p>}
+                                </div>
+                            ) : (
+                                visibleCategories.map(category => (
+                                    <div 
+                                        key={category.id} 
+                                        className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md"
+                                        onDragOver={handleDragOver}
+                                        onDrop={(e) => handleDrop(e, category.id)}
+                                    >
+                                        <div className="bg-gradient-to-r from-slate-50 to-white px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2.5 font-bold text-slate-700">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-blue-500 bg-blue-50 p-1.5 rounded-lg">
+                                                    {category.icon}
+                                                </span>
+                                                {/* Editable Category Title */}
+                                                <input 
+                                                    type="text"
+                                                    value={category.name}
+                                                    onChange={(e) => updateCategoryName(category.id, e.target.value)}
+                                                    className="bg-transparent border-none focus:ring-0 text-slate-700 font-bold p-0 w-full"
+                                                />
+                                            </div>
+                                            
+                                            {/* Only show delete for custom categories (simple heuristic: id starts with 'cat_') */}
+                                            {category.id.startsWith('cat_') && (
+                                                <button onClick={() => deleteCategory(category.id)} className="text-slate-300 hover:text-red-400">
+                                                    <Icons.Trash2 size={16} />
+                                                </button>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="divide-y divide-slate-50">
+                                            {category.items.map(item => {
+                                                const BagIcon = item.bag && BAG_TYPES[item.bag] ? BAG_TYPES[item.bag].icon : Icons.HelpCircle;
+                                                
+                                                return (
+                                                    <div 
+                                                        key={item.id} 
+                                                        draggable="true"
+                                                        onDragStart={(e) => handleDragStart(e, item.id, category.id)}
+                                                        className={`flex items-start p-4 gap-3 transition-colors duration-200 group relative ${
+                                                            item.checked ? 'bg-slate-50/80' : 'hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        {/* Drag Handle Indicator */}
+                                                        <div className="absolute left-1 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing hidden sm:block">
+                                                            <Icons.GripVertical size={14} />
+                                                        </div>
+
+                                                        {/* Mobile Drag Handle */}
+                                                         <div className="absolute left-0 top-0 bottom-0 w-4 cursor-grab sm:hidden touch-none" />
+
+                                                        <div 
+                                                            onClick={() => toggleCheck(category.id, item.id)}
+                                                            className={`mt-1.5 w-6 h-6 rounded-full border-[2.5px] flex items-center justify-center flex-shrink-0 transition-all duration-300 cursor-pointer shadow-sm ml-2 ${
+                                                                item.checked 
+                                                                    ? 'bg-emerald-400 border-emerald-400 text-white scale-105' 
+                                                                    : 'border-slate-300 bg-white hover:border-blue-400'
+                                                            }`}
+                                                        >
+                                                            {item.checked && <Icons.Check size={14} strokeWidth={3.5} />}
+                                                        </div>
+
+                                                        <div className="flex flex-col gap-1.5 w-[5.5rem] shrink-0">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    cycleBag(category.id, item.id);
+                                                                }}
+                                                                className={`flex items-center justify-center gap-1 px-1 py-1.5 rounded-xl text-[10px] font-bold border transition-all cursor-pointer w-full shadow-sm active:scale-95 ${
+                                                                    item.bag && BAG_TYPES[item.bag]
+                                                                        ? BAG_TYPES[item.bag].color 
+                                                                        : 'bg-slate-50 text-slate-400 border-dashed border-slate-300 hover:bg-slate-100'
+                                                                }`}
+                                                            >
+                                                                {item.bag && BAG_TYPES[item.bag] ? (
+                                                                    <>
+                                                                        <BagIcon size={12} strokeWidth={2.5} />
+                                                                        <span className="inline">{BAG_TYPES[item.bag].label}</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Icons.HelpCircle size={12} />
+                                                                        <span className="inline">分類</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
+
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    cycleDay(category.id, item.id);
+                                                                }}
+                                                                className={`flex items-center justify-center gap-1 px-1 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer w-full shadow-sm active:scale-95 ${
+                                                                    item.day 
+                                                                        ? 'bg-teal-50 text-teal-700 border-teal-200' 
+                                                                        : 'bg-white text-slate-300 border-slate-200 hover:border-teal-200'
+                                                                }`}
+                                                            >
+                                                                <Icons.Calendar size={10} />
+                                                                <span>{item.day || '無'}</span>
+                                                            </button>
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                {item.mustCarryOn && (
+                                                                    <div className="flex items-center justify-center text-[10px] font-extrabold text-red-600 w-full mt-0.5">
+                                                                        <Icons.AlertTriangle size={12} strokeWidth={2.5} className="mr-0.5" />
+                                                                        限隨身
+                                                                    </div>
+                                                                )}
+                                                                {item.mustCheckIn && (
+                                                                    <div className="inline-flex items-center justify-center text-[10px] font-bold text-orange-700 bg-orange-50 px-1 py-0.5 rounded border border-orange-100 w-full text-center">
+                                                                        限託運
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex-1 min-w-0 pt-0.5">
+                                                            <textarea 
+                                                                rows={1}
+                                                                value={item.name}
+                                                                onChange={(e) => {
+                                                                    updateItem(category.id, item.id, 'name', e.target.value);
+                                                                    adjustTextareaHeight(e.target);
+                                                                }}
+                                                                ref={(el) => adjustTextareaHeight(el)}
+                                                                className={`w-full text-sm font-medium bg-transparent border-none focus:ring-0 px-0 py-0.5 transition-colors resize-none overflow-hidden leading-relaxed placeholder-slate-300 ${
+                                                                    item.checked ? 'text-slate-400 line-through decoration-slate-300 decoration-2' : 'text-slate-700'
+                                                                }`}
+                                                            />
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                                                            <div className="relative">
+                                                                <input 
+                                                                    type="text"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => updateItem(category.id, item.id, 'quantity', e.target.value)}
+                                                                    className={`w-14 text-center text-xs font-bold bg-slate-100 rounded-lg px-1 py-1.5 focus:bg-white focus:ring-2 focus:ring-blue-200 focus:outline-none text-slate-600 transition-all ${
+                                                                        item.checked ? 'opacity-50' : ''
+                                                                    }`}
+                                                                />
+                                                            </div>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    deleteItem(category.id, item.id);
+                                                                }}
+                                                                className="text-slate-300 hover:text-rose-400 p-2 rounded-full hover:bg-rose-50 transition-colors"
+                                                            >
+                                                                <Icons.Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {!filterBag && !filterDay && activeCategory === category.id ? (
+                                            <div className="p-4 bg-slate-50 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        autoFocus
+                                                        type="text"
+                                                        placeholder="輸入物品名稱..."
+                                                        className="flex-1 text-sm px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none shadow-sm"
+                                                        value={newItemName}
+                                                        onChange={(e) => setNewItemName(e.target.value)}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="數量"
+                                                        className="w-20 text-sm px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none text-center shadow-sm"
+                                                        value={newItemQty}
+                                                        onChange={(e) => setNewItemQty(e.target.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && addItem(category.id, newItemName, newItemQty)}
+                                                    />
+                                                </div>
+                                                <button 
+                                                    onClick={() => addItem(category.id, newItemName, newItemQty)}
+                                                    className="bg-blue-500 text-white w-full py-2.5 rounded-xl text-sm font-bold hover:bg-blue-600 shadow-md shadow-blue-200 transition-all active:scale-[0.98]"
+                                                >
+                                                    新增物品
+                                                </button>
+                                            </div>
+                                        ) : !filterBag && !filterDay && (
+                                            <button 
+                                                onClick={() => setActiveCategory(category.id)}
+                                                className="w-full py-4 text-xs font-bold text-slate-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center gap-1 transition-colors"
+                                            >
+                                                <Icons.Plus size={16} /> 新增
+                                            </button>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                            
+                            {/* Add Category Section */}
+                            {!filterBag && !filterDay && (
+                                <div className="mt-6 mb-24">
+                                     {!addingCategory ? (
+                                        <button 
+                                            onClick={() => setAddingCategory(true)}
+                                            className="w-full py-3 rounded-2xl border-2 border-dashed border-slate-300 text-slate-400 hover:text-blue-500 hover:border-blue-400 font-bold flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            <Icons.Plus size={18} /> 新增分類
+                                        </button>
+                                     ) : (
+                                         <div className="bg-white p-4 rounded-3xl border border-blue-200 shadow-md animate-in fade-in slide-in-from-bottom-2">
+                                            <input 
+                                                autoFocus
+                                                type="text"
+                                                placeholder="輸入分類名稱 (如: 伴手禮)..."
+                                                className="w-full text-sm px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none mb-3"
+                                                value={newCategoryName}
+                                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+                                            />
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setAddingCategory(false)} className="flex-1 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-sm">取消</button>
+                                                <button onClick={addCategory} className="flex-1 py-2 bg-blue-500 text-white rounded-xl text-sm font-bold hover:bg-blue-600">確定新增</button>
+                                            </div>
+                                         </div>
+                                     )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="fixed bottom-6 left-4 right-4 z-50">
+                        <div className="bg-white/90 backdrop-blur-lg border border-white/50 rounded-2xl shadow-xl shadow-slate-200/50 flex justify-around items-center p-1.5">
+                            {TABS.map(tab => {
+                                const isActive = activeTab === tab.id && !filterBag && !filterDay;
+                                const Icon = tab.icon;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            setFilterBag(null);
+                                            setFilterDay(null);
+                                            setActiveTab(tab.id);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }}
+                                        className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-300 ${
+                                            isActive 
+                                                ? 'bg-blue-50 text-blue-600 scale-105' 
+                                                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'drop-shadow-sm' : ''} />
+                                        <span className={`text-[10px] mt-0.5 font-medium ${isActive ? 'font-bold' : ''}`}>
+                                            {tab.label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(HokkaidoPackingList));
+    </script>
+</body>
+</html>
