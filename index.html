@@ -18,7 +18,7 @@
     <!-- 1. 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. 引入 React 和 ReactDOM -->
+    <!-- 2. 引入 React 和 ReactDOM (UMD 版本，最穩定) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
@@ -67,29 +67,34 @@
             holdToDrag: 300
         });
         
-        // 修正 Bug: 移除全域鎖定，改用 CSS touch-action 控制
-        // window.addEventListener( 'touchmove', function() {}, {passive: false}); 
+        window.addEventListener( 'touchmove', function() {}, {passive: false});
     </script>
     
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         * { -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc;overscroll-behavior-y: none; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; }
         textarea { transition: height 0.1s ease; resize: none; }
         
         .dnd-dragging { opacity: 0.5; background-color: #f0f9ff; border: 2px dashed #3b82f6; }
         .dnd-over { background-color: #eff6ff; border: 2px solid #3b82f6; }
-
-        /* 關鍵修正：只對拖曳把手禁止瀏覽器預設觸控行為，允許頁面其他部分捲動 */
-        .drag-handle { touch-action: none; }
     </style>
 </head>
-<body class="text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-safe">
+<body class="text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900">
     <div id="root"></div>
 
+    <!-- 錯誤處理顯示區 -->
+    <div id="error-boundary" style="display:none; padding: 20px; text-align: center; margin-top: 50px;">
+        <h2 class="text-xl font-bold text-red-600 mb-2">App 發生錯誤</h2>
+        <p class="text-slate-600 mb-4">可能是資料讀取異常，請嘗試重置。</p>
+        <button onclick="localStorage.clear(); location.reload();" class="bg-red-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg">
+            重置並修復
+        </button>
+    </div>
+
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
+        const { useState, useEffect, useRef } = React;
 
         // --- 內建圖示庫 ---
         const Icons = {
@@ -114,7 +119,7 @@
             X: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
             Calendar: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
             Umbrella: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 12a11.05 11.05 0 0 0-22 0zm-5 7a3 3 0 0 1-6 0v-7"/></svg>,
-            GripVertical: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>,
+            GripVertical: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
         };
 
         // --- App 邏輯 ---
@@ -123,29 +128,29 @@
             suitcase: { 
                 id: 'suitcase', 
                 label: '行李箱', 
-                color: 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100 hover:border-orange-200', 
-                activeColor: 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-200', 
+                color: 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100', 
+                activeColor: 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200', 
                 icon: Icons.Luggage 
             },
             backpack: { 
                 id: 'backpack', 
                 label: '後背包', 
-                color: 'bg-sky-50 text-sky-600 border-sky-100 hover:bg-sky-100 hover:border-sky-200', 
+                color: 'bg-sky-50 text-sky-600 border-sky-200 hover:bg-sky-100', 
                 activeColor: 'bg-sky-500 text-white border-sky-500 shadow-md shadow-sky-200', 
                 icon: Icons.Backpack 
             },
             pouch: { 
                 id: 'pouch', 
                 label: '隨身包', 
-                color: 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100 hover:border-rose-200', 
+                color: 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100', 
                 activeColor: 'bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-200', 
                 icon: Icons.ShoppingBag 
             },
             wearing: { 
                 id: 'wearing', 
                 label: '穿身上', 
-                color: 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200', 
-                activeColor: 'bg-indigo-500 text-white border-indigo-500 shadow-md shadow-indigo-200', 
+                color: 'bg-violet-50 text-violet-600 border-violet-200 hover:bg-violet-100', 
+                activeColor: 'bg-violet-500 text-white border-violet-500 shadow-md shadow-violet-200', 
                 icon: Icons.User 
             },
         };
@@ -165,7 +170,6 @@
             { keywords: ['傷', '血', '腳'], items: [{ name: 'OK繃', cat: 'medicines' }, { name: '休足時間/貼布', cat: 'medicines' }, { name: '液體絆創膏', cat: 'medicines' }] },
         ];
 
-        // 預設資料 (v51 最終修正版)
         const INITIAL_DATA = {
             title: "北海道 1/8-1/12 (雄獅跟團版)",
             categories: [
@@ -173,7 +177,7 @@
                 id: 'docs',
                 tabId: 'docs',
                 name: '證件與錢財',
-                icon: <Icons.Ticket className="w-5 h-5" />,
+                iconName: 'Ticket',
                 items: [
                     { id: 'd1', name: '護照 (有效期限6個月以上)', quantity: '1本', checked: false, mustCarryOn: true, bag: 'pouch', day: null },
                     { id: 'd4', name: '日幣現金 (貴重物品請隨身)', quantity: '適量', checked: false, mustCarryOn: true, bag: 'pouch', day: null },
@@ -187,7 +191,7 @@
                 id: 'clothes_outer',
                 tabId: 'clothes',
                 name: '衣物：外著與鞋靴',
-                icon: <Icons.Shirt className="w-5 h-5" />,
+                iconName: 'Shirt',
                 items: [
                     { id: 'c_out1', name: '[迪卡儂] SH900 -20°C 防水外套', quantity: '1件', checked: false, bag: 'wearing', day: 'D1' },
                     { id: 'c_out2', name: '[迪卡儂] NH100 防水雪靴-米色', quantity: '1雙', checked: false, bag: 'wearing', day: 'D1' },
@@ -197,7 +201,7 @@
                 id: 'clothes_tops',
                 tabId: 'clothes',
                 name: '衣物：上身與內著',
-                icon: <Icons.Shirt className="w-5 h-5" />,
+                iconName: 'Shirt',
                 items: [
                     { id: 'c_top_uniqlo_warm_worn', name: '[Uniqlo] 棉質極暖 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1' },
                     { id: 'c_mid_fleece_worn', name: '[迪卡儂] 抓絨外套 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1' },
@@ -213,7 +217,7 @@
                 id: 'clothes_bottoms',
                 tabId: 'clothes',
                 name: '衣物：下身與襪子',
-                icon: <Icons.Shirt className="w-5 h-5" />,
+                iconName: 'Shirt',
                 items: [
                     { id: 'c_bot_uniqlo_worn', name: '[Uniqlo] 基本發熱褲 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1-2' },
                     { id: 'c_bot_decathlon_worn', name: '[迪卡儂] NH100 健行褲 (出發穿)', quantity: '1件', checked: false, bag: 'wearing', day: 'D1-2' },
@@ -231,7 +235,7 @@
                 id: 'clothes_underwear',
                 tabId: 'clothes',
                 name: '衣物：內衣/睡衣',
-                icon: <Icons.Shirt className="w-5 h-5" />,
+                iconName: 'Shirt',
                 items: [
                     { id: 'c_underwear_sets', name: '[換洗] 內衣褲 (替換用)', quantity: '4套', checked: false, bag: 'suitcase', day: null },
                     { id: 'c_pajamas', name: '[自備] 睡衣褲', quantity: '1套', checked: false, bag: 'suitcase', day: null },
@@ -241,7 +245,7 @@
                 id: 'clothes_acc',
                 tabId: 'clothes',
                 name: '衣物：保暖配件',
-                icon: <Icons.Shirt className="w-5 h-5" />,
+                iconName: 'Shirt',
                 items: [
                     { id: 'c_scarf_wool', name: '純羊毛圍巾', quantity: '1條', checked: false, bag: 'wearing', day: 'D1' },
                     { id: 'c_hat', name: '毛帽', quantity: '1頂', checked: false, bag: 'suitcase', day: null },
@@ -253,8 +257,9 @@
                 id: 'electronics',
                 tabId: 'electronics',
                 name: '電子產品',
-                icon: <Icons.Plug className="w-5 h-5" />,
+                iconName: 'Plug',
                 items: [
+                    { id: 'e1', name: '網卡 / WiFi機 (eSIM憑證在信箱)', quantity: '1份', checked: false, bag: 'pouch', day: null },
                     { id: 'e_anker25k', name: '[ANKER] A1695 (25000mAh/90Wh)', quantity: '1顆', checked: false, mustCarryOn: true, bag: 'backpack', day: null },
                     { id: 'e_anker10k', name: '[ANKER] A1657 (10000mAh/37Wh)', quantity: '1顆', checked: false, mustCarryOn: true, bag: 'backpack', day: null },
                     { id: 'e3', name: '充電線 / 插頭 (日本為兩孔)', quantity: '1組', checked: false, bag: null, day: null },
@@ -274,7 +279,7 @@
                 id: 'toiletries',
                 tabId: 'toiletries',
                 name: '盥洗與保養 (保濕加強)',
-                icon: <Icons.Sparkles className="w-5 h-5" />,
+                iconName: 'Sparkles',
                 items: [
                     { id: 't_ga_cream', name: '[GA] 黑曜岩新生奇蹟乳霜 15ml (頂級保濕)', quantity: '1罐', checked: false, bag: 'pouch', day: null },
                     { id: 't1', name: '超保濕乳液/身體油', quantity: '1瓶', checked: false, bag: null, day: null },
@@ -289,6 +294,7 @@
                     { id: 't6', name: '潤髮乳/護髮油 (防靜電)', quantity: '1瓶', checked: false, bag: null, day: null },
                     { id: 't_hair_towel', name: '擦髮巾 (快乾神器)', quantity: '2條', checked: false, bag: null, day: null },
                     { id: 't_dry_hair_towel_new', name: '乾髮巾', quantity: '1條', checked: false, bag: null, day: null },
+                    { id: 't7', name: '隱形眼鏡 & 藥水', quantity: '5組', checked: false, bag: null, day: null },
                     { id: 't_floss', name: '牙線 / 牙線棒', quantity: '1盒', checked: false, bag: null, day: null },
                     { id: 't_skin', name: '基礎保養品 (化妝水/精華液)', quantity: '1組', checked: false, bag: null, day: null },
                     { id: 't_sun', name: '防曬乳 (雪地強紫外線)', quantity: '1瓶', checked: false, bag: 'pouch', day: null },
@@ -304,8 +310,9 @@
                 },
                 {
                 id: 'medicines',
+                tabId: 'medicines',
                 name: '藥品與保健',
-                icon: <Icons.BriefcaseMedical className="w-5 h-5" />,
+                iconName: 'BriefcaseMedical',
                 items: [
                     { id: 'm_knee', name: '護膝 (超重要!)', quantity: '1雙', checked: false, bag: null, day: null },
                     { id: 'm_ankle', name: '護踝 (防翻船)', quantity: '1雙', checked: false, bag: null, day: null },
@@ -318,7 +325,7 @@
                 id: 'lifestyle',
                 tabId: 'lifestyle',
                 name: '生活小物',
-                icon: <Icons.Umbrella className="w-5 h-5" />,
+                iconName: 'Umbrella',
                 items: [
                     { id: 'm_drink_bag', name: '飲料提袋', quantity: '1個', checked: false, bag: null, day: null },
                     { id: 'm_lunch_bag', name: '環保便當提袋', quantity: '1個', checked: false, bag: null, day: null },
@@ -381,7 +388,7 @@
             // 確保資料正確讀寫
             useEffect(() => {
                 try {
-                    const savedData = localStorage.getItem('hokkaido_packing_list_jan_v52'); // Updated key for fixed version
+                    const savedData = localStorage.getItem('hokkaido_packing_list_jan_v60'); // Updated key to v60
                     if (savedData) {
                         const parsed = JSON.parse(savedData);
                         if (parsed && parsed.categories) {
@@ -390,11 +397,13 @@
                     }
                 } catch (e) {
                     console.error("Data parse error", e);
+                    const errorDiv = document.getElementById('error-boundary');
+                    if(errorDiv) errorDiv.style.display = 'block';
                 }
             }, []);
 
             useEffect(() => {
-                localStorage.setItem('hokkaido_packing_list_jan_v52', JSON.stringify(listData));
+                localStorage.setItem('hokkaido_packing_list_jan_v60', JSON.stringify(listData));
             }, [listData]);
 
             // Smart Add Logic
@@ -411,57 +420,44 @@
                 setSmartSuggestions(suggestions);
             }, [smartInput]);
 
-            // 修正 Bug: 使用 map 進行不可變更新 (Immutable Update)
             const toggleCheck = (catId, itemId) => {
-                setListData(prev => ({
-                    ...prev,
-                    categories: prev.categories.map(cat => {
-                        if (cat.id !== catId) return cat;
-                        return {
-                            ...cat,
-                            items: cat.items.map(item => {
-                                if (item.id !== itemId) return item;
-                                return { ...item, checked: !item.checked };
-                            })
-                        };
-                    })
-                }));
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    item.checked = !item.checked;
+                    return newData;
+                });
             };
 
             const updateItem = (catId, itemId, field, value) => {
-                setListData(prev => ({
-                    ...prev,
-                    categories: prev.categories.map(cat => {
-                        if (cat.id !== catId) return cat;
-                        return {
-                            ...cat,
-                            items: cat.items.map(item => {
-                                if (item.id !== itemId) return item;
-                                return { ...item, [field]: value };
-                            })
-                        };
-                    })
-                }));
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    item[field] = value;
+                    return newData;
+                });
             };
             
             // Edit Category Name
             const updateCategoryName = (catId, newName) => {
-                 setListData(prev => ({
-                    ...prev,
-                    categories: prev.categories.map(cat => {
-                        if (cat.id !== catId) return cat;
-                        return { ...cat, name: newName };
-                    })
-                 }));
+                 setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    category.name = newName;
+                    return newData;
+                });
             };
             
             // Delete Category
             const deleteCategory = (catId) => {
                  if(window.confirm('確定要刪除此分類及其所有物品嗎？')) {
-                     setListData(prev => ({
-                        ...prev,
-                        categories: prev.categories.filter(c => c.id !== catId)
-                     }));
+                     setListData(prev => {
+                        const newData = { ...prev };
+                        newData.categories = newData.categories.filter(c => c.id !== catId);
+                        return newData;
+                    });
                  }
             };
             
@@ -473,14 +469,15 @@
                     id: `cat_${Date.now()}`,
                     tabId: activeTab,
                     name: newCategoryName,
-                    icon: <Icons.Sparkles className="w-5 h-5" />, // Default icon
+                    iconName: 'Sparkles', // 使用字串名稱
                     items: []
                 };
                 
-                setListData(prev => ({
-                    ...prev,
-                    categories: [...prev.categories, newCat]
-                }));
+                setListData(prev => {
+                    const newData = { ...prev };
+                    newData.categories.push(newCat);
+                    return newData;
+                });
                 
                 setNewCategoryName('');
                 setAddingCategory(false);
@@ -488,90 +485,71 @@
 
 
             const cycleBag = (catId, itemId) => {
-                setListData(prev => ({
-                    ...prev,
-                    categories: prev.categories.map(cat => {
-                        if (cat.id !== catId) return cat;
-                        return {
-                            ...cat,
-                            items: cat.items.map(item => {
-                                if (item.id !== itemId) return item;
-                                
-                                // Logic to calculate next bag
-                                const bags = ['suitcase', 'backpack', 'pouch', 'wearing', null]; 
-                                let attempts = 0;
-                                let currentBag = item.bag;
-                                let nextBag = currentBag;
-                                const currentIndex = bags.indexOf(currentBag);
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    
+                    const bags = ['suitcase', 'backpack', 'pouch', 'wearing', null]; 
+                    
+                    let attempts = 0;
+                    let currentBag = item.bag;
+                    const currentIndex = bags.indexOf(currentBag);
+                    
+                    while (attempts < bags.length) {
+                        const candidateIndex = (currentIndex + 1 + attempts) % bags.length;
+                        const candidateBag = bags[candidateIndex];
+                        
+                        let isValid = true;
+                        if (candidateBag === 'suitcase' && item.mustCarryOn) isValid = false;
+                        if ((candidateBag === 'backpack' || candidateBag === 'pouch' || candidateBag === 'wearing') && item.mustCheckIn) isValid = false;
 
-                                while (attempts < bags.length) {
-                                    const candidateIndex = (currentIndex + 1 + attempts) % bags.length;
-                                    const candidateBag = bags[candidateIndex];
-                                    
-                                    let isValid = true;
-                                    if (candidateBag === 'suitcase' && item.mustCarryOn) isValid = false;
-                                    if ((candidateBag === 'backpack' || candidateBag === 'pouch' || candidateBag === 'wearing') && item.mustCheckIn) isValid = false;
-
-                                    if (isValid) {
-                                        nextBag = candidateBag;
-                                        break;
-                                    }
-                                    attempts++;
-                                }
-                                return { ...item, bag: nextBag };
-                            })
-                        };
-                    })
-                }));
+                        if (isValid) {
+                            item.bag = candidateBag;
+                            break;
+                        }
+                        attempts++;
+                    }
+                    return newData;
+                });
             };
 
             const cycleDay = (catId, itemId) => {
-                setListData(prev => ({
-                    ...prev,
-                    categories: prev.categories.map(cat => {
-                        if (cat.id !== catId) return cat;
-                        return {
-                            ...cat,
-                            items: cat.items.map(item => {
-                                if (item.id !== itemId) return item;
-                                
-                                const currentDay = item.day || null;
-                                const currentIndex = DAY_OPTIONS.indexOf(currentDay);
-                                const nextIndex = (currentIndex + 1) % DAY_OPTIONS.length;
-                                
-                                return { ...item, day: DAY_OPTIONS[nextIndex] };
-                            })
-                        };
-                    })
-                }));
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    const item = category.items.find(i => i.id === itemId);
+                    
+                    const currentDay = item.day || null;
+                    const currentIndex = DAY_OPTIONS.indexOf(currentDay);
+                    const nextIndex = (currentIndex + 1) % DAY_OPTIONS.length;
+                    
+                    item.day = DAY_OPTIONS[nextIndex];
+                    return newData;
+                });
             };
 
             const addItem = (catId, name, qty) => {
                 if (!name.trim()) return;
-                const newItem = {
-                    id: Date.now().toString(),
-                    name: name,
-                    quantity: qty || '1個',
-                    checked: false,
-                    mustCarryOn: false,
-                    mustCheckIn: false,
-                    bag: null,
-                    day: null
-                };
-
-                setListData(prev => ({
-                    ...prev,
-                    categories: prev.categories.map(cat => {
-                        if (cat.id !== catId) return cat;
-                        return { ...cat, items: [...cat.items, newItem] };
-                    })
-                }));
-
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    category.items.push({
+                        id: Date.now().toString(),
+                        name: name,
+                        quantity: qty || '1個',
+                        checked: false,
+                        mustCarryOn: false,
+                        mustCheckIn: false,
+                        bag: null,
+                        day: null
+                    });
+                    return newData;
+                });
                 if (activeCategory) {
                     setNewItemName('');
                     setNewItemQty('');
-                    // Keep focus for continuous adding, but here we just reset inputs
-                    // setActiveCategory(null); // Optional: keep category open
+                    setActiveCategory(null);
                 }
             };
             
@@ -586,7 +564,6 @@
                 e.dataTransfer.dropEffect = 'move';
             };
             
-            // 修正 Bug: Handle Drop 重寫，確保不會突變 State
             const handleDrop = (e, toCatId) => {
                 e.preventDefault();
                 const data = e.dataTransfer.getData('application/json');
@@ -595,36 +572,23 @@
                 try {
                     const { itemId, fromCatId } = JSON.parse(data);
                     
-                    if (fromCatId === toCatId) return; // Same category, ignore for now
-
+                    if (fromCatId === toCatId) return; // Same category, do nothing for now (sorting requires more logic)
+                    
                     setListData(prev => {
-                        // 1. Find the item
-                        const fromCat = prev.categories.find(c => c.id === fromCatId);
-                        if (!fromCat) return prev;
-                        const itemToMove = fromCat.items.find(i => i.id === itemId);
-                        if (!itemToMove) return prev;
+                        const newData = { ...prev };
+                        const fromCat = newData.categories.find(c => c.id === fromCatId);
+                        const toCat = newData.categories.find(c => c.id === toCatId);
+                        
+                        // 防呆檢查：避免分類不存在導致崩潰
+                        if (!fromCat || !toCat) return prev;
 
-                        // 2. Return new state with item moved
-                        return {
-                            ...prev,
-                            categories: prev.categories.map(cat => {
-                                if (cat.id === fromCatId) {
-                                    // Remove from source
-                                    return {
-                                        ...cat,
-                                        items: cat.items.filter(i => i.id !== itemId)
-                                    };
-                                }
-                                if (cat.id === toCatId) {
-                                    // Add to destination
-                                    return {
-                                        ...cat,
-                                        items: [...cat.items, itemToMove]
-                                    };
-                                }
-                                return cat;
-                            })
-                        };
+                        const itemIndex = fromCat.items.findIndex(i => i.id === itemId);
+                        if (itemIndex === -1) return prev;
+                        
+                        const [item] = fromCat.items.splice(itemIndex, 1);
+                        toCat.items.push(item);
+                        
+                        return newData;
                     });
                     
                 } catch (err) {
@@ -633,22 +597,18 @@
             };
 
             const deleteItem = (catId, itemId) => {
-                setListData(prev => ({
-                    ...prev,
-                    categories: prev.categories.map(cat => {
-                        if (cat.id !== catId) return cat;
-                        return {
-                            ...cat,
-                            items: cat.items.filter(i => i.id !== itemId)
-                        };
-                    })
-                }));
+                setListData(prev => {
+                    const newData = { ...prev };
+                    const category = newData.categories.find(c => c.id === catId);
+                    category.items = category.items.filter(i => i.id !== itemId);
+                    return newData;
+                });
             };
 
             const resetList = () => {
                 if (window.confirm('確定要重置清單嗎？這會恢復到預設的專屬清單狀態。')) {
                     setListData(INITIAL_DATA);
-                    localStorage.removeItem('hokkaido_packing_list_jan_v52');
+                    localStorage.removeItem('hokkaido_packing_list_jan_v60');
                 }
             };
 
@@ -712,16 +672,10 @@
                 );
             }
 
-            // 優化: 只有當高度真的需要改變時才寫入 DOM，減少 Layout Thrashing
             const adjustTextareaHeight = (element) => {
                 if (element) {
-                    if (element.style.height !== 'auto') {
-                        element.style.height = 'auto'; 
-                    }
-                    const newHeight = `${element.scrollHeight}px`;
-                    if (element.style.height !== newHeight) {
-                        element.style.height = newHeight;
-                    }
+                    element.style.height = 'auto';
+                    element.style.height = `${element.scrollHeight}px`;
                 }
             };
 
@@ -759,6 +713,7 @@
                     </div>
 
                     <div className="max-w-md mx-auto p-4 relative">
+                        {/* Smart Add Button/Area */}
                         <div className="mb-6">
                             <button 
                                 onClick={() => setShowSmartAdd(!showSmartAdd)}
@@ -814,71 +769,16 @@
                         </div>
 
                         <div className="flex gap-2 mb-4 overflow-x-auto pb-2 text-xs">
-                            <button 
-                                onClick={() => { setFilterBag(filterBag === 'suitcase' ? null : 'suitcase'); setFilterDay(null); }}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all duration-300 whitespace-nowrap shadow-sm active:scale-95 ${
-                                    filterBag === 'suitcase' 
-                                        ? BAG_TYPES.suitcase.activeColor 
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600'
-                                }`}
-                            >
-                                <Icons.Luggage size={16} /> <span className="font-bold text-xs">行李箱</span>
-                            </button>
-                            <button 
-                                onClick={() => { setFilterBag(filterBag === 'backpack' ? null : 'backpack'); setFilterDay(null); }}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all duration-300 whitespace-nowrap shadow-sm active:scale-95 ${
-                                    filterBag === 'backpack' 
-                                        ? BAG_TYPES.backpack.activeColor 
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600'
-                                }`}
-                            >
-                                <Icons.Backpack size={16} /> <span className="font-bold text-xs">後背包</span>
-                            </button>
-                            <button 
-                                onClick={() => { setFilterBag(filterBag === 'pouch' ? null : 'pouch'); setFilterDay(null); }}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all duration-300 whitespace-nowrap shadow-sm active:scale-95 ${
-                                    filterBag === 'pouch' 
-                                        ? BAG_TYPES.pouch.activeColor 
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-pink-50 hover:border-pink-200 hover:text-pink-600'
-                                }`}
-                            >
-                                <Icons.ShoppingBag size={16} /> <span className="font-bold text-xs">隨身包</span>
-                            </button>
-                            <button 
-                                onClick={() => { setFilterBag(filterBag === 'wearing' ? null : 'wearing'); setFilterDay(null); }}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all duration-300 whitespace-nowrap shadow-sm active:scale-95 ${
-                                    filterBag === 'wearing' 
-                                        ? BAG_TYPES.wearing.activeColor 
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600'
-                                }`}
-                            >
-                                <Icons.User size={16} /> <span className="font-bold text-xs">穿身上</span>
-                            </button>
-                            <button 
-                                onClick={() => { setFilterBag(filterBag === 'unclassified' ? null : 'unclassified'); setFilterDay(null); }}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all duration-300 whitespace-nowrap shadow-sm active:scale-95 ${
-                                    filterBag === 'unclassified' 
-                                        ? 'bg-slate-600 text-white border-slate-600 ring-2 ring-slate-200 shadow-lg'
-                                        : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
-                                }`}
-                            >
-                                <Icons.HelpCircle size={16} /> <span className="font-bold text-xs">未分類</span>
-                            </button>
+                             <button onClick={() => { setFilterBag(filterBag === 'suitcase' ? null : 'suitcase'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'suitcase' ? BAG_TYPES.suitcase.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600'}`}><Icons.Luggage size={16} /> <span className="font-bold text-xs">行李箱</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'backpack' ? null : 'backpack'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'backpack' ? BAG_TYPES.backpack.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600'}`}><Icons.Backpack size={16} /> <span className="font-bold text-xs">後背包</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'pouch' ? null : 'pouch'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'pouch' ? BAG_TYPES.pouch.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-pink-50 hover:border-pink-200 hover:text-pink-600'}`}><Icons.ShoppingBag size={16} /> <span className="font-bold text-xs">隨身包</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'wearing' ? null : 'wearing'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'wearing' ? BAG_TYPES.wearing.activeColor : 'bg-white border-slate-200 text-slate-600 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600'}`}><Icons.User size={16} /> <span className="font-bold text-xs">穿身上</span></button>
+                             <button onClick={() => { setFilterBag(filterBag === 'unclassified' ? null : 'unclassified'); setFilterDay(null); }} className={`flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all whitespace-nowrap shadow-sm active:scale-95 ${filterBag === 'unclassified' ? 'bg-slate-600 text-white border-slate-600 ring-2 ring-slate-200 shadow-lg' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}><Icons.HelpCircle size={16} /> <span className="font-bold text-xs">未分類</span></button>
                         </div>
 
                         <div className="flex gap-2 mb-6 overflow-x-auto pb-1 px-1 scrollbar-hide">
                             {['D1', 'D2', 'D3', 'D4', 'D5'].map(day => (
-                                <button
-                                    key={day}
-                                    onClick={() => { setFilterDay(filterDay === day ? null : day); setFilterBag(null); }}
-                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs font-bold transition-all active:scale-95 ${
-                                        filterDay === day 
-                                            ? 'bg-teal-500 text-white border-teal-500 ring-2 ring-teal-200 shadow-md' 
-                                            : 'bg-white border-slate-200 text-slate-500 hover:bg-teal-50 hover:text-teal-600'
-                                    }`}
-                                >
-                                    {day}
-                                </button>
+                                <button key={day} onClick={() => { setFilterDay(filterDay === day ? null : day); setFilterBag(null); }} className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs font-bold transition-all active:scale-95 ${filterDay === day ? 'bg-teal-500 text-white border-teal-500 ring-2 ring-teal-200 shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-teal-50 hover:text-teal-600'}`}>{day}</button>
                             ))}
                         </div>
 
@@ -899,7 +799,7 @@
                                         <div className="bg-gradient-to-r from-slate-50 to-white px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2.5 font-bold text-slate-700">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-blue-500 bg-blue-50 p-1.5 rounded-lg">
-                                                    {category.icon}
+                                                    {category.iconName && Icons[category.iconName] ? React.createElement(Icons[category.iconName], {size: 18}) : <Icons.Sparkles size={18}/>}
                                                 </span>
                                                 {/* Editable Category Title */}
                                                 <input 
@@ -920,6 +820,7 @@
                                         
                                         <div className="divide-y divide-slate-50">
                                             {category.items.map(item => {
+                                                // Dynamic Icon for Bag
                                                 const BagIcon = item.bag && BAG_TYPES[item.bag] ? BAG_TYPES[item.bag].icon : Icons.HelpCircle;
                                                 
                                                 return (
@@ -931,13 +832,13 @@
                                                             item.checked ? 'bg-slate-50/80' : 'hover:bg-slate-50'
                                                         }`}
                                                     >
-                                                        {/* Drag Handle Indicator - 加入 drag-handle class 控制 touch-action */}
-                                                        <div className="absolute left-1 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing hidden sm:block drag-handle">
+                                                        {/* Drag Handle Indicator */}
+                                                        <div className="absolute left-1 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing hidden sm:block">
                                                             <Icons.GripVertical size={14} />
                                                         </div>
 
-                                                        {/* Mobile Drag Handle - 加入 drag-handle class 控制 touch-action */}
-                                                         <div className="absolute left-0 top-0 bottom-0 w-6 cursor-grab sm:hidden opacity-0 drag-handle" />
+                                                        {/* Mobile Drag Handle */}
+                                                         <div className="absolute left-0 top-0 bottom-0 w-4 cursor-grab sm:hidden touch-none" />
 
                                                         <div 
                                                             onClick={() => toggleCheck(category.id, item.id)}
@@ -1096,7 +997,7 @@
                                             <Icons.Plus size={18} /> 新增分類
                                         </button>
                                      ) : (
-                                      <div className="bg-white p-4 rounded-3xl border border-blue-200 shadow-md animate-in fade-in slide-in-from-bottom-2">
+                                         <div className="bg-white p-4 rounded-3xl border border-blue-200 shadow-md animate-in fade-in slide-in-from-bottom-2">
                                             <input 
                                                 autoFocus
                                                 type="text"
